@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+import bs4
+import hashlib
+import logging
+import mechanize
+import os
+import sys
+import urllib2
+import urlparse
+
+
+__version__ = '0.0.1'
+
+logging.basicConfig(level=logging.INFO)
+l = logging.getLogger('activity').info
+
+try:
+    url = sys.argv[1]
+except Exception, e:
+    print >> sys.stderr, 'error: the URL to the extension page must be the first and only parameter'
+    print >> sys.stderr, 'example: download-firefox-extension https://addons.mozilla.org/en-US/firefox/addon/firetube'
+    sys.exit(os.EX_USAGE)
+
+
+b = mechanize.Browser()
+b.set_handle_robots(False)
+b.addheaders = [(
+    'User-Agent',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:37.0) Gecko/20100101 Firefox/37.0',
+)]
+l('Loading page %s', url)
+r = b.open(url)
+d = r.read()
+l('Finding download button...')
+p = bs4.BeautifulSoup(d, 'lxml')
+button = p.findAll('a', {'class': 'download'})[0]
+hashtype = button.attrs['data-hash'].split(':', 1)[0]
+hashvalue = button.attrs['data-hash'].split(':', 1)[1]
+exturl = urlparse.urljoin(url, button.attrs['href'])
+
+b.set_handle_redirect(False)
+l('Retrieving extension URL: %s', url)
+while True:
+    try:
+        r = b.open(exturl)
+        d = r.read()
+        raise Exception('Not reached.')
+    except urllib2.HTTPError, e:
+        if e.getcode() not in (301, 302): raise
+        l('Redirect from: %s', exturl)
+        exturl = e.hdrs['Location']
+        l('Redirect to: %s', exturl)
+        if 'addons.cdn.mozilla.net' in exturl:
+            exturl = exturl.split('?', 1)[0]
+            break
+p = urlparse.urlparse(exturl).path
+f = os.path.split(p)[1]
+r = b.open(exturl)
+d = r.read()
+hasher = getattr(hashlib, hashtype)()
+hasher.update(d)
+computedhash = hasher.hexdigest()
+if computedhash != hashvalue:
+    raise ValueError('hash value for %s does not match: %r != %r',
+                     f, hashvalue, computedhash)
+l('Saving to: %s', f)
+file(f, "wb").write(d)
+print '* URL:', exturl
+print '* Filename:', f
+print '* Hash type:', hashtype
+print '* Advertised hash:', hashvalue
+print '* Computed hash:', computedhash
