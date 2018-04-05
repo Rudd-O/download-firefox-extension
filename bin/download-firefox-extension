@@ -10,7 +10,7 @@ import sys
 import urllib2
 import urlparse
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 logging.basicConfig(level=logging.INFO)
 l = logging.getLogger('activity').info
@@ -38,7 +38,10 @@ button = p.findAll('a', {'class': 'InstallButton-button'})[0]
 store_state = json.loads(p.findAll('script', {'id': 'redux-store-state'})[0].text)
 addon_data = store_state['addons']['byID'].values()[0]
 guid = addon_data['guid']
-platform_files = addon_data['platformFiles']['linux']
+try:
+    platform_files = addon_data['platformFiles']['linux']
+except KeyError:
+    platform_files = addon_data['platformFiles']['all']
 hashtype = platform_files['hash'].split(':', 1)[0]
 hashvalue = platform_files['hash'].split(':', 1)[1]
 exturl = urlparse.urljoin(url, button.attrs['href'])
